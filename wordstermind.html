@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<HTML><HEAD>
+
+<TITLE>Wordstermind</TITLE>
+
+<meta charset="utf-8">
+<meta name="author" content="Mark Fletcher">
+<meta name="date" content="2022-05-19">
+<meta name="description" content="It's like mastermind, but with words">
+
+<STYLE>
+
+body {
+	background-color: #333;
+}
+
+#loaderror {
+	font-size: 28pt;
+	font-family: courier new, monospace;
+	font-weight: bold;
+	color: red;
+}
+
+.keyboard {
+	text-align: center;
+}
+
+.keyboardkey {
+}
+
+.wordrow {
+	font-size: 32pt;
+	font-family: courier new, monospace;
+	font-weight: bold;
+}
+
+.attemptNum, .letterblock {
+	display: inline-block;
+	vertical-align: top;
+	height: 1em;
+	padding: 12px 2px;
+	border: 2px solid black;
+	text-align: center;
+}
+
+.attemptNum {
+	margin-right: 8px;
+	width: 2em;
+	color: #bbb;
+	background-color: #444;
+}
+
+.letterblock {
+	margin-right: 4px;
+	width: 1.3em;
+	color: #222;
+	background-color: #bbb;
+}
+
+.letterblock.active {
+	color: #228;
+	background-color: lightblue;
+	border-color: blue;
+}
+
+.letterblock.invalid {
+	color: red;
+	background-color: #fbb;
+	border-color: red;
+}
+
+.letterblock.match {
+	color: green;
+	background-color: lightgreen;
+}
+
+.letterblock.close {
+	/* burlywood, darkkhaki, goldenrod */
+	color: gold;
+	background-color: olive;
+}
+
+.letterblock.wrong {
+	color: #222;
+}
+
+.wordrow button {
+	margin-left: 42px;
+	padding: 0 42px;
+	vertical-align: bottom;
+	font-size: 20pt;
+	border: 6px outset orange;
+	border-radius: 3px;
+	background-color: orange;
+}
+
+</STYLE><SCRIPT>
+
+var config = {
+	chances: 6,
+	wordsonly: false,
+
+	classes: {
+		letterBlock: 'letterblock',
+		letterMatch: 'match',
+		letterClose: 'close',
+		letterWrong: 'wrong',
+		letterInvalid: 'invalid'
+	}
+};
+
+
+
+// --------
+// GameMain
+
+function GameMain(el){
+	if(!(el instanceof Element)) throw new Error('Invalid game area');
+
+	this.area = el;
+	this.word = getWord();
+	this.currentRow = null;
+	this.currentRowEl = null;
+	this.activeLetterBlock = null;
+	this.chancesLeft = config.chances;
+
+	this.inputListenFunc = GameMain.handleInput.bind(this);
+	window.addEventListener('keyup', this.inputListenFunc);
+
+	this.guessButton = document.createElement('button');
+	this.guessButton.className = 'guessbutton';
+	this.guessButton.innerHTML = '&#x23CE;'; // x2386, x23ce
+	this.guessButton.addEventListener('click', this.enterGuess.bind(this));
+
+	this.addLetterBlockRow();
+}
+GameMain.prototype = Object.create(null);
+
+
+GameMain.handleInput = function(e){
+	// Handle mouse/touch inputs
+	if(e instanceof MouseEvent || e instanceof TouchEvent){
+		if(!(e.target.lb instanceof LetterBlock)) return;
+
+		if(this.activeLetterBlock) this.activeLetterBlock.blur();
+
+		this.activeLetterBlock = e.target.lb;
+		this.activeLetterBlock.setGuess('');
+		this.activeLetterBlock.focus();
+
+		return;
+	}
+
+	// Handle keyboard/letter inputs
+	// TODO: May need to get more fancy than just using `key` for compat
+	if(e instanceof KeyboardEvent){
+		// Special Keys
+		switch(e.key){
+		case '0':
+			this.setActiveLetter(0);
+
+		return;
+		case 'ArrowLeft':
+			if(!this.activeLetterBlock){
+				this.setActiveLetter(this.currentRow.length - 1);
+			} else {
+				this.setActiveLetter(this.activeLetterBlock.position - 1);
+			}
+
+		return;
+		case 'ArrowRight':
+			if(!this.activeLetterBlock){
+				this.setActiveLetter(0);
+			} else if(this.activeLetterBlock.position + 1 < this.currentRow.length) {
+				this.setActiveLetter(this.activeLetterBlock.position + 1);
+			}
+
+		return;
+		case 'Enter':
+			this.enterGuess();
+
+		return;
+		case 'Delete':
+			if(this.activeLetterBlock) this.activeLetterBlock.setGuess('');
+
+		return;
+		case 'Backspace':
+			if(this.activeLetterBlock){
+				this.setActiveLetter(this.activeLetterBlock.position - 1);
+			} else {
+				this.setActiveLetter(this.currentRow.length - 1);
+			}
+			this.activeLetterBlock.setGuess('');
+
+		return;
+		}
+
+		if(!this.activeLetterBlock) return;
+		// Idk, this seems kinda janky...
+		if(!e.key.match(/^[A-Za-z]$/)) return;
+
+		this.activeLetterBlock.setGuess(e.key);
+		this.setActiveLetter(this.activeLetterBlock.position + 1);
+
+		return;
+	}
+
+	// TODO: Remove after dev
+	window.alert('unknown event: ' + e.toString());
+	console.log(e);
+};
+
+
+GameMain.prototype.enterGuess = function(){
+	if(this.chancesLeft <= 0) return;
+
+	// Build up guess from active data
+	var guess = '';
+	for(var j = 0; j < this.currentRow.length; ++j){
+		guess += this.currentRow[j].guess;
+	}
+
+	if(!this.validateGuess(guess)){
+		// invalid guess, display error
+		window.alert('Yo, bad guess, no good');
+		return false;
+	}
+
+	// Apply colors after validation
+	for(var j = 0; j < this.currentRow.length; ++j){
+		this.currentRow[j].applyJudgement();
+	}
+
+	// Check for winnage
+	if(guess === this.word){
+		window.alert('O nice, you got it!');
+
+		// Set chances to 0 as a way to halt interaction
+		this.chancesLeft = 0;
+		return;
+	}
+
+	--this.chancesLeft;
+	if(this.chancesLeft <= 0){
+		window.alert('Uh uh, sorry. You lose, bro.');
+	} else {
+		this.addLetterBlockRow();
+	}
+};
+
+GameMain.prototype.setGuess = function(input){
+	if(typeof input !== 'string' || input.length !== this.word.length){
+		throw new Error('Invalid guess to set');
+	}
+
+	for(var j = 0; j < this.currentRow.length; ++j){
+		this.currentRow[j].setGuess(input[j]);
+	}
+};
+
+GameMain.prototype.setActiveLetter = function(idx){
+	// Clip to zero on lower, but unbound on upper
+	if(idx < 0) idx = 0;
+
+	if(this.activeLetterBlock) this.activeLetterBlock.blur();
+	if(this.currentRow[idx]){
+		this.activeLetterBlock = this.currentRow[idx];
+		this.activeLetterBlock.focus();
+	} else {
+		this.activeLetterBlock = null;
+	}
+};
+
+GameMain.prototype.validateGuess = function(guess){
+	if(guess.length !== this.word.length) return false;
+	if(window.config.wordsonly && wordlist.indexOf(guess) < 0) return false;
+
+	return true;
+};
+
+GameMain.prototype.addLetterBlockRow = function(){
+	if(this.chancesLeft <= 0) return;
+
+	if(this.currentRowEl){
+		this.currentRowEl.removeEventListener('click', this.inputListenFunc);
+		this.currentRowEl.removeEventListener('touchend', this.inputListenFunc);
+	}
+
+	var tmp;
+	this.currentRowEl = document.createElement('div');
+	this.currentRowEl.className = 'wordrow';
+
+	tmp = document.createElement('div');
+	tmp.className = 'attemptNum';
+	tmp.innerHTML = this.chancesLeft + ':';
+	this.currentRowEl.appendChild(tmp);
+
+	this.currentRow = [];
+	for(var j = 0; j < this.word.length; ++j){
+		tmp = new LetterBlock(this.word, j);
+		this.currentRow.push(tmp);
+		this.currentRowEl.appendChild(tmp.getElement());
+	}
+
+	this.currentRowEl.appendChild(this.guessButton);
+	this.currentRowEl.addEventListener('click', this.inputListenFunc);
+	this.currentRowEl.addEventListener('touchend', this.inputListenFunc);
+
+	this.area.appendChild(this.currentRowEl);
+	this.setActiveLetter(0);
+};
+
+
+
+// -----------
+// LetterBlock
+
+function LetterBlock(word, position){
+	this.position = position;
+	this.letter = word[position];
+	this.guess = '';
+
+	this.others = '';
+	for(var j = 0; j < word.length; ++j){
+		if(this.others.indexOf(word[j]) < 0){
+			this.others += word[j];
+		}
+	}
+
+	this.element = document.createElement('div');
+	this.element.className = config.classes.letterBlock;
+	this.element.lb = this;
+}
+LetterBlock.prototype = Object.create(null);
+
+LetterBlock.prototype.getElement = function(){
+	return this.element;
+};
+
+LetterBlock.prototype.focus = function(){
+	this.element.classList.add('active');
+};
+
+LetterBlock.prototype.blur = function(){
+	this.element.classList.remove('active');
+};
+
+LetterBlock.prototype.setGuess = function(input){
+	this.guess = input.toLowerCase();
+	this.element.innerHTML = this.guess.toUpperCase();
+}
+
+LetterBlock.prototype.applyJudgement = function(invalid){
+	var judgement = config.classes.letterWrong;
+
+	if(invalid){
+		judgement = config.classes.letterInvalid;
+	} else {
+		if(this.guess === '') judgement = config.classes.letterWrong;
+		else if(this.guess === this.letter) judgement = config.classes.letterMatch;
+		else if(this.others.indexOf(this.guess) >= 0) judgement = config.classes.letterClose;
+	}
+
+	this.element.className = config.classes.letterBlock + ' ' + judgement;
+};
+
+
+
+// -----------
+// KeyboardKey
+
+function KeyboardKey(){
+}
+KeyboardKey.prototype = Object.create(null);
+
+
+
+// --------
+// Keyboard
+
+function Keyboard(){
+}
+Keyboard.prototype = Object.create(null);
+
+Keyboard.rows = [
+	'qwertyuiop',
+	'asdfghjkl',
+	'zxcvbnm'
+];
+
+
+
+// -----
+// Setup
+
+window.addEventListener('load', function(){
+	window.game = new GameMain(document.getElementById('gamearea'));
+
+	var err = document.getElementById('loaderror');
+	err.parentNode.removeChild(err);
+});
+
+</SCRIPT>
+
+</HEAD><BODY>
+
+<div id="loaderror">Oops, a no bueno occured</div>
+
+<div id="gamearea"></div>
+<div id="keyboard"></div>
+
+<SCRIPT>
+
+function getWord(){
+	return wordlist[Math.floor(Math.random() * wordlist.length)];
+}
+
+var wordlist = [
+'piano', 'yacht', 'words', 'house', 'testy',
+'abate', 'crime', 'grump', 'grate', 'tasty',
+'match', 'close', 'wrong', 'error', 'hasty'
+];
+
+</SCRIPT>
+</BODY></HTML>
