@@ -50,6 +50,11 @@ body {
 	background-color: #444;
 }
 
+.attemptNum.over {
+	width: 4em;
+	background-color: #644;
+}
+
 .letterblock {
 	margin-right: 4px;
 	width: 1.3em;
@@ -84,7 +89,7 @@ body {
 	color: #222;
 }
 
-.wordrow button {
+.guessbutton {
 	margin-left: 42px;
 	padding: 0 42px;
 	vertical-align: bottom;
@@ -94,11 +99,30 @@ body {
 	background-color: orange;
 }
 
+.restartbutton {
+	margin-bottom: 10px;
+	padding: 4px 22px;
+	font-size: 16pt;
+	border: 6px outset #e42;
+	border-radius: 3px;
+	background-color: #e42;
+}
+
+.keepgoingbutton {
+	margin: 10px 0;
+	padding: 4px 42px;
+	font-size: 16pt;
+	border: 6px outset lightblue;
+	border-radius: 3px;
+	background-color: lightblue;
+}
+
 </STYLE><SCRIPT>
 
 var config = {
 	chances: 6,
 	wordsonly: false,
+	secondchance: true,
 
 	classes: {
 		letterBlock: 'letterblock',
@@ -118,11 +142,6 @@ function GameMain(el){
 	if(!(el instanceof Element)) throw new Error('Invalid game area');
 
 	this.area = el;
-	this.word = getWord();
-	this.currentRow = null;
-	this.currentRowEl = null;
-	this.activeLetterBlock = null;
-	this.chancesLeft = config.chances;
 
 	this.inputListenFunc = GameMain.handleInput.bind(this);
 	window.addEventListener('keyup', this.inputListenFunc);
@@ -132,7 +151,17 @@ function GameMain(el){
 	this.guessButton.innerHTML = '&#x23CE;'; // x2386, x23ce
 	this.guessButton.addEventListener('click', this.enterGuess.bind(this));
 
-	this.addLetterBlockRow();
+	this.restartButton = document.createElement('button');
+	this.restartButton.className = 'restartbutton';
+	this.restartButton.innerHTML = 'New Game?';
+	this.restartButton.addEventListener('click', this.init.bind(this));
+
+	this.keepGoingButton = document.createElement('button');
+	this.keepGoingButton.className = 'keepgoingbutton';
+	this.keepGoingButton.innerHTML = 'Keep Trying?';
+	this.keepGoingButton.addEventListener('click', this.enableFreePlay.bind(this));
+
+	this.init();
 }
 GameMain.prototype = Object.create(null);
 
@@ -211,8 +240,27 @@ GameMain.handleInput = function(e){
 };
 
 
+GameMain.prototype.init = function(){
+	this.area.innerHTML = '';
+	this.area.appendChild(this.restartButton);
+
+	this.word = getWord();
+	this.currentRow = null;
+	this.currentRowEl = null;
+	this.activeLetterBlock = null;
+	this.chancesLeft = config.chances;
+
+	this.addLetterBlockRow();
+};
+
+GameMain.prototype.enableFreePlay = function(){
+	this.area.removeChild(this.keepGoingButton);
+	this.chancesLeft = -1;
+	this.addLetterBlockRow();
+};
+
 GameMain.prototype.enterGuess = function(){
-	if(this.chancesLeft <= 0) return;
+	if(this.chancesLeft === 0) return;
 
 	// Build up guess from active data
 	var guess = '';
@@ -241,8 +289,9 @@ GameMain.prototype.enterGuess = function(){
 	}
 
 	--this.chancesLeft;
-	if(this.chancesLeft <= 0){
+	if(this.chancesLeft === 0){
 		window.alert('Uh uh, sorry. You lose, bro.');
+		if(config.secondchance) this.area.appendChild(this.keepGoingButton);
 	} else {
 		this.addLetterBlockRow();
 	}
@@ -279,7 +328,7 @@ GameMain.prototype.validateGuess = function(guess){
 };
 
 GameMain.prototype.addLetterBlockRow = function(){
-	if(this.chancesLeft <= 0) return;
+	if(this.chancesLeft === 0) return;
 
 	if(this.currentRowEl){
 		this.currentRowEl.removeEventListener('click', this.inputListenFunc);
@@ -292,6 +341,7 @@ GameMain.prototype.addLetterBlockRow = function(){
 
 	tmp = document.createElement('div');
 	tmp.className = 'attemptNum';
+	if(this.chancesLeft < 0) tmp.classList.add('over');
 	tmp.innerHTML = this.chancesLeft + ':';
 	this.currentRowEl.appendChild(tmp);
 
@@ -308,6 +358,7 @@ GameMain.prototype.addLetterBlockRow = function(){
 
 	this.area.appendChild(this.currentRowEl);
 	this.setActiveLetter(0);
+	this.currentRowEl.scrollIntoView(false);
 };
 
 
