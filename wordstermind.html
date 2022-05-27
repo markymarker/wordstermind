@@ -11,6 +11,8 @@
 <STYLE>
 
 body {
+	margin: 0;
+	padding: 0;
 	background-color: #333;
 }
 
@@ -21,11 +23,54 @@ body {
 	color: red;
 }
 
+.gamecontainer {
+	display: flex;
+	flex-direction: column;
+	/* height set programatically to fill client */
+}
+
+.gameboard {
+	flex-grow: 1;
+	padding: 8px;
+	overflow-y: auto;
+}
+
 .keyboard {
+	display: inline-block;
+	padding: 8px;
+	border: 3px inset #999;
 	text-align: center;
 }
 
+.keyboardrow {
+}
+
 .keyboardkey {
+	display: inline-block;
+	margin: 5px;
+	padding: 10px;
+	border: 6px outset #aaa;
+	font-family: courier new, monospace;
+	font-weight: bold;
+	color: #333;
+	background-color: #ddd;
+}
+
+.keyboardkey.present {
+	color: green;
+	background-color: lightgreen;
+	border-color: lightgreen;
+}
+
+.keyboardkey.notpresent {
+	background-color: #666;
+	border-color: #666;
+}
+
+.keyboardkey.invalid {
+	color: #faa;
+	background-color: #a42;
+	border-color: #a42;
 }
 
 .wordrow {
@@ -129,7 +174,12 @@ var config = {
 		letterMatch: 'match',
 		letterClose: 'close',
 		letterWrong: 'wrong',
-		letterInvalid: 'invalid'
+		letterInvalid: 'invalid',
+
+		keyboardKey: 'keyboardkey',
+		keyboardYes: 'present',
+		keyboardNo: 'notpresent',
+		keyboardInvalid: 'invalid'
 	}
 };
 
@@ -138,10 +188,13 @@ var config = {
 // --------
 // GameMain
 
-function GameMain(el){
+function GameMain(el, keyboard){
 	if(!(el instanceof Element)) throw new Error('Invalid game area');
 
 	this.area = el;
+
+	this.kb = null;
+	if(keyboard instanceof Keyboard) this.kb = keyboard;
 
 	this.inputListenFunc = GameMain.handleInput.bind(this);
 	window.addEventListener('keyup', this.inputListenFunc);
@@ -244,6 +297,8 @@ GameMain.prototype.init = function(){
 	this.area.innerHTML = '';
 	this.area.appendChild(this.restartButton);
 
+	if(this.kb) this.kb.reset();
+
 	this.word = getWord();
 	this.currentRow = null;
 	this.currentRowEl = null;
@@ -276,7 +331,9 @@ GameMain.prototype.enterGuess = function(){
 
 	// Apply colors after validation
 	for(var j = 0; j < this.currentRow.length; ++j){
-		this.currentRow[j].applyJudgement();
+		var blockjudge = this.currentRow[j].determineJudgement();
+		this.currentRow[j].applyJudgement(blockjudge);
+		if(this.kb) this.kb.setState(this.currentRow[j].guess, blockjudge)
 	}
 
 	// Check for winnage
@@ -291,7 +348,10 @@ GameMain.prototype.enterGuess = function(){
 	--this.chancesLeft;
 	if(this.chancesLeft === 0){
 		window.alert('Uh uh, sorry. You lose, bro.');
-		if(config.secondchance) this.area.appendChild(this.keepGoingButton);
+		if(config.secondchance){
+			this.area.appendChild(this.keepGoingButton);
+			this.keepGoingButton.scrollIntoView();
+		}
 	} else {
 		this.addLetterBlockRow();
 	}
@@ -358,7 +418,7 @@ GameMain.prototype.addLetterBlockRow = function(){
 
 	this.area.appendChild(this.currentRowEl);
 	this.setActiveLetter(0);
-	this.currentRowEl.scrollIntoView(false);
+	this.currentRowEl.scrollIntoView();
 };
 
 
@@ -384,6 +444,15 @@ function LetterBlock(word, position){
 }
 LetterBlock.prototype = Object.create(null);
 
+
+LetterBlock.judgements = {
+	invalid: 0,
+	wrong: 1,
+	close: 2,
+	match: 3
+};
+
+
 LetterBlock.prototype.getElement = function(){
 	return this.element;
 };
@@ -401,18 +470,29 @@ LetterBlock.prototype.setGuess = function(input){
 	this.element.innerHTML = this.guess.toUpperCase();
 }
 
-LetterBlock.prototype.applyJudgement = function(invalid){
-	var judgement = config.classes.letterWrong;
+LetterBlock.prototype.determineJudgement = function(){
+	if(this.guess === '') return LetterBlock.judgements.invalid;
+	if(this.guess === this.letter) return LetterBlock.judgements.match;
+	if(this.others.indexOf(this.guess) >= 0) return LetterBlock.judgements.close;
 
-	if(invalid){
-		judgement = config.classes.letterInvalid;
-	} else {
-		if(this.guess === '') judgement = config.classes.letterWrong;
-		else if(this.guess === this.letter) judgement = config.classes.letterMatch;
-		else if(this.others.indexOf(this.guess) >= 0) judgement = config.classes.letterClose;
+	return LetterBlock.judgements.wrong;
+};
+
+LetterBlock.prototype.applyJudgement = function(judgement){
+	var jclass = config.classes.letterInvalid;
+
+	switch(judgement){
+	case LetterBlock.judgements.invalid: jclass = config.classes.letterInvalid;
+	break;
+	case LetterBlock.judgements.wrong: jclass = config.classes.letterWrong;
+	break;
+	case LetterBlock.judgements.close: jclass = config.classes.letterClose;
+	break;
+	case LetterBlock.judgements.match: jclass = config.classes.letterMatch;
+	break;
 	}
 
-	this.element.className = config.classes.letterBlock + ' ' + judgement;
+	this.element.className = config.classes.letterBlock + ' ' + jclass;
 };
 
 
@@ -420,16 +500,71 @@ LetterBlock.prototype.applyJudgement = function(invalid){
 // -----------
 // KeyboardKey
 
-function KeyboardKey(){
+function KeyboardKey(symbol){
+	this.symbol = symbol;
+
+	this.element = document.createElement('div');
+	this.element.className = 'keyboardkey';
+	this.element.innerHTML = this.symbol.toUpperCase();
+
 }
 KeyboardKey.prototype = Object.create(null);
+
+
+KeyboardKey.prototype.getElement = function(){
+	return this.element;
+};
+
+KeyboardKey.prototype.reset = function(){
+	this.element.className = config.classes.keyboardKey;
+};
+
+KeyboardKey.prototype.applyJudgement = function(judgement){
+	var jclass = config.classes.keyboardInvalid;
+
+	switch(judgement){
+	case LetterBlock.judgements.invalid: jclass = config.classes.keyboardInvalid;
+	break;
+	case LetterBlock.judgements.wrong: jclass = config.classes.keyboardNo;
+	break;
+	case LetterBlock.judgements.close:
+	case LetterBlock.judgements.match:
+		jclass = config.classes.keyboardYes;
+	break;
+	}
+
+	this.element.className = config.classes.keyboardKey + ' ' + jclass;
+};
 
 
 
 // --------
 // Keyboard
 
-function Keyboard(){
+function Keyboard(el){
+	if(!(el instanceof Element)) throw new Error('Invalid keyboard area');
+
+	this.area = el;
+	this.area.classList.add('keyboard');
+	this.keys = {};
+
+	// Fill up the keys array based on the rows definition
+	var j, i, row, trow, tkey;
+	for(j = 0; j < Keyboard.rows.length; ++j){
+		trow = document.createElement('div');
+		trow.className = 'keyboardrow';
+
+		row = Keyboard.rows[j];
+		for(i = 0; i < row.length; ++i){
+			tkey = new KeyboardKey(row[i]);
+			trow.appendChild(tkey.getElement());
+			this.keys[tkey.symbol] = tkey;
+		}
+
+		this.area.appendChild(trow);
+	}
+
+	// TODO: Click functionality for kb area
 }
 Keyboard.prototype = Object.create(null);
 
@@ -440,12 +575,35 @@ Keyboard.rows = [
 ];
 
 
+Keyboard.prototype.reset = function(){
+	var keys = Object.keys(this.keys); // keys is keys' keys aka the keys of keys
+	for(var j = 0; j < keys.length; ++j){
+		this.keys[keys[j]].reset();
+	}
+};
+
+Keyboard.prototype.setState = function(symbol, judgement){
+	if(!this.keys[symbol]) return;
+	this.keys[symbol].applyJudgement(judgement);
+};
+
+
 
 // -----
 // Setup
 
+function resizeHandler(){
+	document.getElementById('maincontainer').style.height = window.innerHeight + 'px';
+}
+
 window.addEventListener('load', function(){
-	window.game = new GameMain(document.getElementById('gamearea'));
+	window.game = new GameMain(
+		document.getElementById('gamearea'),
+		new Keyboard(document.getElementById('keyboard'))
+	);
+
+	resizeHandler();
+	window.addEventListener('resize', resizeHandler);
 
 	var err = document.getElementById('loaderror');
 	err.parentNode.removeChild(err);
@@ -457,8 +615,10 @@ window.addEventListener('load', function(){
 
 <div id="loaderror">Oops, a no bueno occured</div>
 
-<div id="gamearea"></div>
-<div id="keyboard"></div>
+<div id="maincontainer" class="gamecontainer">
+	<div id="gamearea" class="gameboard"></div>
+	<div><div id="keyboard"></div></div>
+</div>
 
 <SCRIPT>
 
@@ -469,8 +629,18 @@ function getWord(){
 var wordlist = [
 'piano', 'yacht', 'words', 'house', 'testy',
 'abate', 'crime', 'grump', 'grate', 'tasty',
-'match', 'close', 'wrong', 'error', 'hasty'
+'match', 'close', 'wrong', 'error', 'hasty',
+'haunt', 'gaunt', 'watch', 'whats', 'updog'
 ];
+
+// Not just five letters!
+if(window.location.href.indexOf('?neato') >= 0){
+	wordlist = wordlist.concat([
+		'one', 'two', 'three', 'four', 'five',
+		'six', 'seven', 'eight', 'nine', 'ten'
+	]);
+}
+
 
 </SCRIPT>
 </BODY></HTML>
