@@ -230,6 +230,7 @@ GameMain.handleInput = function(e){
 		this.activeLetterBlock.setGuess('');
 		this.activeLetterBlock.focus();
 
+		e.stopPropagation(); e.preventDefault();
 		return;
 	}
 
@@ -240,6 +241,7 @@ GameMain.handleInput = function(e){
 		switch(e.key){
 		case '0':
 			this.setActiveLetter(0);
+			e.stopPropagation(); e.preventDefault();
 
 		return;
 		case 'ArrowLeft':
@@ -248,6 +250,7 @@ GameMain.handleInput = function(e){
 			} else {
 				this.setActiveLetter(this.activeLetterBlock.position - 1);
 			}
+			e.stopPropagation(); e.preventDefault();
 
 		return;
 		case 'ArrowRight':
@@ -256,14 +259,17 @@ GameMain.handleInput = function(e){
 			} else if(this.activeLetterBlock.position + 1 < this.currentRow.length) {
 				this.setActiveLetter(this.activeLetterBlock.position + 1);
 			}
+			e.stopPropagation(); e.preventDefault();
 
 		return;
 		case 'Enter':
 			this.enterGuess();
+			e.stopPropagation(); e.preventDefault();
 
 		return;
 		case 'Delete':
 			if(this.activeLetterBlock) this.activeLetterBlock.setGuess('');
+			e.stopPropagation(); e.preventDefault();
 
 		return;
 		case 'Backspace':
@@ -273,6 +279,7 @@ GameMain.handleInput = function(e){
 				this.setActiveLetter(this.currentRow.length - 1);
 			}
 			this.activeLetterBlock.setGuess('');
+			e.stopPropagation(); e.preventDefault();
 
 		return;
 		}
@@ -284,6 +291,7 @@ GameMain.handleInput = function(e){
 		this.activeLetterBlock.setGuess(e.key);
 		this.setActiveLetter(this.activeLetterBlock.position + 1);
 
+		e.stopPropagation(); e.preventDefault();
 		return;
 	}
 
@@ -506,7 +514,7 @@ function KeyboardKey(symbol){
 	this.element = document.createElement('div');
 	this.element.className = 'keyboardkey';
 	this.element.innerHTML = this.symbol.toUpperCase();
-
+	this.element.kk = this;
 }
 KeyboardKey.prototype = Object.create(null);
 
@@ -564,15 +572,28 @@ function Keyboard(el){
 		this.area.appendChild(trow);
 	}
 
-	// TODO: Click functionality for kb area
+	var inpfunc = Keyboard.handleInput.bind(this);
+	this.area.addEventListener('click', inpfunc);
+	this.area.addEventListener('touchend', inpfunc);
 }
 Keyboard.prototype = Object.create(null);
+
 
 Keyboard.rows = [
 	'qwertyuiop',
 	'asdfghjkl',
 	'zxcvbnm'
 ];
+
+Keyboard.handleInput = function(e){
+	if(!(e.target.kk instanceof KeyboardKey)) return;
+
+	window.dispatchEvent(
+		new KeyboardEvent('keyup', {key: e.target.kk.symbol})
+	);
+
+	e.stopPropagation(); e.preventDefault();
+};
 
 
 Keyboard.prototype.reset = function(){
@@ -640,7 +661,6 @@ if(window.location.href.indexOf('?neato') >= 0){
 		'six', 'seven', 'eight', 'nine', 'ten'
 	]);
 }
-
 
 </SCRIPT>
 </BODY></HTML>
