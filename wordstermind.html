@@ -3,10 +3,12 @@
 
 <TITLE>Wordstermind</TITLE>
 
-<meta charset="utf-8">
 <meta name="author" content="Mark Fletcher">
 <meta name="date" content="2022-05-19">
 <meta name="description" content="It's like mastermind, but with words">
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=650">
 
 <STYLE>
 
@@ -37,6 +39,7 @@ body {
 
 .keyboard {
 	display: inline-block;
+	max-width: 100%;
 	padding: 8px;
 	border: 3px inset #999;
 	text-align: center;
@@ -47,8 +50,8 @@ body {
 
 .keyboardkey {
 	display: inline-block;
-	margin: 5px;
-	padding: 10px;
+	margin: 10px 5px;
+	padding: 18px 15px;
 	border: 6px outset #aaa;
 	font-family: courier new, monospace;
 	font-weight: bold;
@@ -221,7 +224,9 @@ GameMain.prototype = Object.create(null);
 
 GameMain.handleInput = function(e){
 	// Handle mouse/touch inputs
-	if(e instanceof MouseEvent || e instanceof TouchEvent){
+	if(e instanceof MouseEvent
+	|| (window.TouchEvent && e instanceof TouchEvent)
+	){
 		if(!(e.target.lb instanceof LetterBlock)) return;
 
 		if(this.activeLetterBlock) this.activeLetterBlock.blur();
