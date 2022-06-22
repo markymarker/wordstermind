@@ -646,25 +646,15 @@ window.addEventListener('load', function(){
 	<div><div id="keyboard"></div></div>
 </div>
 
+<SCRIPT src="./ext_wordlist.js"></SCRIPT>
 <SCRIPT>
 
 function getWord(){
 	return wordlist[Math.floor(Math.random() * wordlist.length)];
 }
 
-var wordlist = [
-'piano', 'yacht', 'words', 'house', 'testy',
-'abate', 'crime', 'grump', 'grate', 'tasty',
-'match', 'close', 'wrong', 'error', 'hasty',
-'haunt', 'gaunt', 'watch', 'whats', 'updog'
-];
-
-// Not just five letters!
-if(window.location.href.indexOf('?neato') >= 0){
-	wordlist = wordlist.concat([
-		'one', 'two', 'three', 'four', 'five',
-		'six', 'seven', 'eight', 'nine', 'ten'
-	]);
+if(!window.wordlist){
+	window.wordlist = ['oh', 'no'];
 }
 
 </SCRIPT>
